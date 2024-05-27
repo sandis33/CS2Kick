@@ -1,35 +1,26 @@
-﻿namespace CS2Kick
+﻿namespace Kick
 {
     using CounterStrikeSharp.API.Core;
 
     using System.Text.Json.Serialization;
     public sealed class DatabaseSettings
     {
-        [JsonPropertyName("host")]
-        public string Host { get; set; } = "localhost";
+        public string Host { get; set; } = "127.0.0.1";
 
-        [JsonPropertyName("username")]
-        public string Username { get; set; } = "root";
+        public string Username { get; set; } = "kick_cs2";
 
-        [JsonPropertyName("database")]
-        public string Database { get; set; } = "database";
+        public string Database { get; set; } = "kick_web";
 
-        [JsonPropertyName("password")]
-        public string Password { get; set; } = "password";
+        public string Password { get; set; } = "ymMxFd7DC#tBz";
 
-        [JsonPropertyName("port")]
         public int Port { get; set; } = 3306;
 
-        [JsonPropertyName("sslmode")]
         public string Sslmode { get; set; } = "none";
 
-        [JsonPropertyName("table-prefix")]
-        public string TablePrefix { get; set; } = "";
     }
 
     public sealed class PluginConfig : BasePluginConfig
     {
-        [JsonPropertyName("database-settings")]
         public DatabaseSettings DatabaseSettings { get; set; } = new DatabaseSettings();
 
     }

@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34728.123
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CS2Kick", "CS2Kick.csproj", "{191190F9-374D-4854-8B25-B0BF1CB5F60A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Kick", "Kick.csproj", "{191190F9-374D-4854-8B25-B0BF1CB5F60A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

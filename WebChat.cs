@@ -1,74 +1,143 @@
-﻿namespace CS2Kick
-{
+﻿using System.Net;
+using System.Web;
+using CounterStrikeSharp.API;
+using CounterStrikeSharp.API.Modules.Admin;
 
+namespace Kick
+{
     using CounterStrikeSharp.API.Core;
-    using CS2Kick;
+    using Kick;
     using Serilog;
     using System.Text;
     using CounterStrikeSharp.API.Modules.Utils;
     using CounterStrikeSharp.API.Modules.Commands;
     using CounterStrikeSharp.API.Modules.Entities;
-
-
+    using Kick.Player;
+    using static Kick.ModuleWeb;
+    using CounterStrikeSharp.API.Modules.Menu;
 
     public sealed partial class Plugin : BasePlugin
     {
+        public readonly string host = "http://127.0.0.1:9080";
+        public readonly string server = "ttt";
+        public readonly string kicklv = "kick.lv";
+        public readonly int kicklvid = 31;
+        
 
-
-
-
-        private string? playername { get; set; }
-        private string? steamid { get; set; }
-        private string? message { get; set; }
-
-
+        public string playername;
+        public string message;
+        private int kickid;
+        private string msg;
 
         private string? LogPath;
         private string? FileName;
         private string? FilePath;
 
+        public void Initialize_Chat()
+        {
+            //AddCommand("css_web", "web test", OnCommandWeb);
+            AddCommand("webchat", "Send message from web", OnCommandWebChat);
+            //AddCommand("css_calladmin", "Izsauc adminu", OnCommandCalladmin);
+            AddCommandListener("say", OnPlayerSayPublic, HookMode.Post);
 
+            RegisterEventHandler((EventPlayerConnectFull @event, GameEventInfo info) =>
+            {
+                CCSPlayerController? player = @event.Userid;
+
+                if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
+                    return HookResult.Continue;
+
+                _ = sendChatMessageAsync(kicklvid, kicklv, $"[green]{player.PlayerName}[/green] Pievienojās serverim");
+                    return HookResult.Continue;
+            });
+
+            RegisterEventHandler((EventPlayerDisconnect @event, GameEventInfo info) =>
+            {
+                CCSPlayerController? player = @event.Userid;
+
+                if (player is null || player.IsBot || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
+                    return HookResult.Continue;
+
+                
+                _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"[blue]{player.PlayerName}[/blue] izgāja no servera");
+                return HookResult.Continue;
+            });
+
+            RegisterListener<Listeners.OnMapStart>((mapName) =>
+            {
+            
+            _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"Karte nomainījās uz [blue]{mapName}[/blue]");
+            });
+        }
         public HookResult OnPlayerSayPublic(CCSPlayerController? player, CommandInfo info)
         {
             message = info.GetArg(1);
-            steamid = player.SteamID.ToString();
-            playername = player.PlayerName;
-            if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
-            if (player == null || !player.IsValid || player.IsBot || message == null)
+            if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV || message == null)
                 return HookResult.Continue;
 
-
-            string chatmsg = ($" {steamid} {playername}: {message}");
-            //WebChat chatAsync = new WebChat();
-            _ = sendMessageAsync($" {player.SteamID} {player.PlayerName}:{message}");
-            chatLog(chatmsg);
+            KickPlayer? kickplayer = GetKickPlayer(player!);
+            WebData? webData = kickplayer.webData;
+            kickid = webData.webID;
+            playername = player.PlayerName;
+            if (message.StartsWith("/"))
+                return HookResult.Continue;
+            if (message.StartsWith("!"))
+                return HookResult.Continue;
+            if (string.IsNullOrWhiteSpace(message)) 
+                return HookResult.Continue;
+            
+            _ = sendChatMessageAsync(kickid, playername, message);
+            
+            string logmsg = ($" {player.SteamID} || {playername}: {message}");
+            chatLog(logmsg);
             return HookResult.Continue;
         }
-
-
-        public async Task sendMessageAsync(string msg)
+        public async Task sendChatMessageAsync(int kickid, string playername, string message)
         {
-            string webhook = "https://discord.com/api/webhooks/1232097682395238420/jrLMM9LN4C6UHCi4EBoj2bjr0AfTSmCQU0PLAB4F1WJXBw8pGZu3rhfYqN5Z4TdY7zyq";
-            using (var httpClient = new HttpClient())
+            using (var _httpclient = new HttpClient())
             {
-                var payload = new
-                {
-                    content = msg
-                };
-
-                var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
-                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-
-                var response = await httpClient.PostAsync(webhook, content);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    chatLog($"Neizdevās nosūtīt ziņu.: {response.StatusCode}");
-                }
+                msg = $"/?id={kickid}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={HttpUtility.UrlEncode(server)}";
+                var url = $"{host}{msg}";
+                var response = await _httpclient.GetAsync(url);
             }
         }
-        public void chatLog(string msg)
+
+        //public async Task callAdminAsync(int kickid, string playername, string message, bool hasWeb)
+        //{
+        //    using (var _httpclient = new HttpClient())
+        //    {
+        //        if (hasWeb)
+        //        {
+        //            msg =
+        //                $"/?id={kickid}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={HttpUtility.UrlEncode(server)}";
+        //        }
+        //        else
+        //        {
+        //            msg =
+        //                $"/?nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={HttpUtility.UrlEncode(server)}";
+        //        }
+
+        //        var url = $"{host}{msg}";
+        //        var response = await _httpclient.GetAsync(url);
+        //    }
+        //}
+        public void OnCommandWebChat(CCSPlayerController player, CommandInfo info)
+        {
+            if(!CommandHelper(player, info, CommandUsage.SERVER_ONLY, 2,"<name> <msg>", permission: "@css/rcon"))
+               return;
+            string name = info.GetArg(1);
+            string msg = info.GetArg(2);
+            
+            Server.PrintToChatAll($" \x04[WEB] \x0F{name} \x10: {msg}");
+            
+            
+        }
+
+        //////////////////////////////
+        //          CHATLOG         //
+        //////////////////////////////
+        public void chatLog(string logmsg)
         {
             LogPath = Path.Combine(_ModuleDirectory, "../../logs/kick/");
             FileName = ("chat-") + DateTime.Now.ToString("MM-dd-yyyy") + (".txt");
@@ -76,133 +145,18 @@
 
             if (!Directory.Exists(LogPath))
             {
-                Directory.CreateDirectory(LogPath);
+            Directory.CreateDirectory(LogPath);
             }
+
             if (!File.Exists(FilePath))
             {
-                File.Create(FilePath);
+            File.Create(FilePath);
             }
-
-
 
             using (StreamWriter writer = File.AppendText(FilePath))
             {
-                writer.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + msg);
-            }           
-        }
-
-
-
-
-
-
-
-
-
-
-
-        /*public override void Load(bool hotReload)
-        {
-            RegisterEventHandler<EventPlayerChat>((@event, info) =>
-            {
-                CCSPlayerController player = new CCSPlayerController(NativeAPI.GetEntityFromIndex(@event.Userid));
-                var playername = player.PlayerName;
-                LogPath = Path.Combine(ModuleDirectory, "../../logs/");
-                FileName = DateTime.Now.ToString("MM-dd-yyyy") + (".txt");
-                FilePath = Path.Combine(ModuleDirectory, "../../logs/") + ($"{FileName}");
-
-                if (player == null || !player.IsValid || player.IsBot || @event.Text == null)
-                    return HookResult.Continue;
-
-                string team = "ALL";
-                if (@event.Teamonly)
-                {
-
-                    switch ((byte)(CsTeam)player.TeamNum)
-                    {
-                        case (byte)CsTeam.Terrorist:
-                            {
-                                team = "TERRORIST";
-                                break;
-                            }
-                        case (byte)CsTeam.CounterTerrorist:
-                            {
-                                team = "COUNTER-TERRORIST";
-                                break;
-                            }
-                        case (byte)CsTeam.Spectator:
-                            {
-                                team = "SPECTATOR";
-                                break;
-                            }
-                        default:
-                            {
-                                team = "ALL";
-                                break;
-                            }
-                    }
-                }
-                var chatmsg = ($"{playername}: {@event.Text} {player.SteamID}");
-                //WebChat chatAsync = new WebChat();
-                _ = sendMessageAsync(playername, @event.Text, player.SteamID);
-                chatLog(chatmsg);
-                return HookResult.Continue;
-            });//WebChat end
-        }
-
-        public async Task sendMessageAsync(string playerName, string message, ulong steamID)
-        {
-            using (var httpClient = new HttpClient())
-            {
-                string webhook = "https://discord.com/api/webhooks/1232097682395238420/jrLMM9LN4C6UHCi4EBoj2bjr0AfTSmCQU0PLAB4F1WJXBw8pGZu3rhfYqN5Z4TdY7zyq";
-                var embed = new
-                {
-                    title = playerName,
-                    description = $"{message}\n[Steam Profile](https://steamcommunity.com/profiles/{steamID})",
-                    color = 16711680,
-                    footer = new
-                    {
-                        text = ("CS2Pub")
-                    }
-                };
-
-                var payload = new
-                {
-                    embeds = new[] { embed }
-                };
-
-                var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
-                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-
-                var response = await httpClient.PostAsync(webhook, content);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    chatLog($"Failed to send message to Discord webhook. Status code: {response.StatusCode}");
-                }
+            writer.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + logmsg);
             }
         }
-        public async Task sendMessageAsync(string msg, string playerName, string message)
-        {
-            string webhook = "https://discord.com/api/webhooks/1232097682395238420/jrLMM9LN4C6UHCi4EBoj2bjr0AfTSmCQU0PLAB4F1WJXBw8pGZu3rhfYqN5Z4TdY7zyq";
-            using (var httpClient = new HttpClient())
-            {
-                var payload = new
-                {
-                    content = message
-                };
-
-                var jsonPayload = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
-                var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-
-                var response = await httpClient.PostAsync(webhook, content);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    chatLog($"Failed to send message to Discord webhook. Status code: {response.StatusCode}");
-                }
-            }
-        }*/
-
     }
 }
