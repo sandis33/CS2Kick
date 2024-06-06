@@ -5,7 +5,7 @@
     {
         public override string ModuleName => "Kick Main";
         public override string ModuleAuthor => "Lxst";
-        public override string ModuleVersion => "0.2";
+        public override string ModuleVersion => "1";
     }
 
 }

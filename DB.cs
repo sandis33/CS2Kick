@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Runtime;
 using System.Text;
@@ -51,7 +52,7 @@ namespace Kick
         public async Task LoadWebDataAsync(KickPlayer kickplayer)
         {
             string combinedQuery = $@"
-                SELECT id,username,lvl,xp,name,steamid2 FROM web_users WHERE steamid2 = @steamid2";
+                SELECT id,username,name,lvl,xp,xp_time,steamid2 FROM web_users WHERE steamid2 = @steamid2";
 
             try
             {
@@ -81,14 +82,15 @@ namespace Kick
             webData = new WebData
             {
                 webID = row.id,
-                webName = row.username,
-                xp = row.xp,
+                webNick = row.username,
+                webName = row.name,
                 lvl = row.lvl,
+                xp = row.xp,
+                xpTime = row.xp_time,
                 hasWeb = true,
             };
-            
+
             kickplayer.webData = webData;
-            KickPlayers.Add(kickplayer);
         }
         public async Task SetWebStatusAsync(KickPlayer kickplayer)
         {
@@ -96,7 +98,7 @@ namespace Kick
             string last_activity = unixTimestamp.ToString();
 
             string combinedQuery = $@"
-                UPDATE web_users SET current_module = @current_module, last_activity = @last_activity WHERE id = @kickid";
+                UPDATE web_users SET current_module = @current_module, last_activity = @last_activity WHERE id = @kickID";
 
             try
             {
@@ -105,7 +107,7 @@ namespace Kick
                     await connection.OpenAsync();
 
                     var parameters = new DynamicParameters();
-                    parameters.Add("@kickid", kickplayer.webData.webID);
+                    parameters.Add("@kickID", kickplayer.webData.webID);
                     parameters.Add("@current_module", "play_2cs1");
                     parameters.Add("@last_activity", last_activity);
 
@@ -120,15 +122,94 @@ namespace Kick
             }
         }
 
-        public async Task UpdateWebStatusAsync(int kickid)
+        public async Task UpdateWebStatusAsync(int kickID)
         {
             using (var _httpclient = new HttpClient())
             {
-                msg = $"/?type=update_location&userid={kickid}&online=0";
+                string msg = $"/?type=update_location&userid={kickID}&online=0";
                 var url = $"{host}{msg}";
                 var response = await _httpclient.GetAsync(url);
             }
 
+        }
+
+        public async Task ReloadWebDataAsync(KickPlayer kickplayer)
+        {
+            string query = $@"
+            SELECT xp_time FROM web_users WHERE id = @kickID";
+
+            try
+            {
+                using (var connection = CreateConnection())
+                {
+                    await connection.OpenAsync();
+
+                    var parameters = new DynamicParameters();
+                    parameters.Add("@kickID", kickplayer.webData.webID);
+
+                    var results = await connection.QueryFirstAsync(query, parameters);
+                    kickplayer.webData.xpTime = results.xp_time;
+                }
+            }
+            catch (Exception ex)
+            {
+                Server.NextFrame((() => Logger.LogError("ERROR WHILE UPDATING WEBDATA: {ErrorMessage}", ex.Message)));
+            }
+        }
+        public async Task UpdateXpTime(KickPlayer kickplayer)
+        {
+            string combinedQuery = $@"
+                UPDATE web_users SET xp_time = @xptime WHERE id = @kickid";
+
+            try
+            {
+                using (var connection = CreateConnection(/*Config*/))
+                {
+                    await connection.OpenAsync();
+
+                    var parameters = new DynamicParameters();
+                    parameters.Add("@kickid", kickplayer.webData.webID);
+                    parameters.Add("@xptime", kickplayer.webData.xpTime);
+
+                    var rows = await connection.QueryAsync(combinedQuery, parameters);
+                }
+            }
+            catch (Exception ex)
+            {
+                Server.NextFrame(() => Logger.LogError("ERROR while updating XP_TIME in DB: {ErrorMessage}", ex.Message));
+            }
+        }
+        public async Task SaveAllPlayersDataAsync()
+        {
+            using (var connection = CreateConnection())
+            {
+                await connection.OpenAsync();
+
+                using (var save = await connection.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        foreach (KickPlayer kickplayer in KickPlayers.ToList())
+                        {
+                            if (!kickplayer.IsValid || !kickplayer.IsPlayer)
+                                continue;
+
+                            if (kickplayer.webData.hasWeb)
+                                await UpdateXpTime(kickplayer);
+                        }
+
+                        await save.CommitAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        await save.RollbackAsync();
+                        Server.NextFrame(() => Logger.LogError("ERROR while saving all players WEB data: {ErrorMessage}", ex.Message));
+                        throw;
+                    }
+                }
+            }
+
+            KickPlayers = new List<KickPlayer>(KickPlayers.Where(player => player.IsValid));
         }
     }
 }

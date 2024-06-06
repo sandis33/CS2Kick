@@ -14,9 +14,11 @@ namespace Kick
         public class WebData
         {
             public required int webID { get; set; }
+            public required string webNick { get; set; }
+            public required string webName { get; set; }
             public required int lvl { get; set; }
             public required int xp { get; set; }
-            public required string webName { get; set; }
+            public required int xpTime { get; set; }
             public required bool hasWeb { get; set; }
         }
         public required Plugin plugin;

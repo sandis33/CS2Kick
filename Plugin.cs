@@ -15,6 +15,7 @@ using Kick.Player;
 using static Kick.ModuleWeb;
 using static CounterStrikeSharp.API.Core.Listeners;
 using System.Numerics;
+using System.Xml.Linq;
 
 
 namespace Kick;
@@ -35,65 +36,84 @@ public partial class Plugin : BasePlugin/*, IPluginConfig<PluginConfig>*/
 
         Initialize_Chat();
         Initialize_Events();
-        
-    }
 
+    }
+    public override void Unload(bool hotReload)
+    {
+        Task.Run(SaveAllPlayersDataAsync);
+
+        this.Dispose();
+    }
     public void Initialize_Events()
     {
         string kicklv = "kick.lv";
         string kicklvid = "31";
         string msg;
-        //RegisterEventHandler((EventPlayerConnectFull @event, GameEventInfo info) =>
-        //{
-        //    CCSPlayerController? player = @event.Userid;
-        //    if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
-        //        return HookResult.Continue;
-        //    KickPlayer kickplayer = GetKickPlayer(player);
-        //    if (kickplayer.webData.hasWeb == true)
-        //    {
-        //        Server.NextFrame(() => SetWebStatusAsync(kickplayer));
-        //    }
-        //    return HookResult.Continue;
-        //});
+
         RegisterEventHandler((EventPlayerActivate @event, GameEventInfo info) =>
         {
             CCSPlayerController? player = @event.Userid;
-
+            string name;
             if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
                 return HookResult.Continue;
-            
-            if (KickPlayers.Any(p => p.Controller == player))
-            {
-                KickPlayer kplayer = GetKickPlayer(player);
-                if(kplayer.webData.hasWeb)
-                {
-                    Server.NextFrame(() => SetWebStatusAsync(kplayer));
-                }
-                return HookResult.Continue;
-            }
 
-            
             KickPlayer kickplayer = new KickPlayer(player);
             if (player.IsBot)
             {
                 KickPlayers.Add(kickplayer);
                 return HookResult.Continue;
             }
+
             WebData? webData = null;
             webData = new WebData
             {
                 webID = 0,
+                webNick = "",
                 webName = "",
                 xp = 0,
                 lvl = 0,
+                xpTime = 0,
                 hasWeb = false,
             };
+
             kickplayer.webData = webData;
+
+            Task.Run(async () => await LoadWebDataAsync(kickplayer)).Wait();
+
             KickPlayers.Add(kickplayer);
 
-            Task.Run(() => LoadWebDataAsync(kickplayer));
+            return HookResult.Continue;
+        });
 
-        
+        RegisterEventHandler((EventPlayerConnectFull @event, GameEventInfo info) =>
+        {
+            CCSPlayerController? player = @event.Userid;
+            string name;
+            if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
+                return HookResult.Continue;
+            KickPlayer? kickplayer = GetKickPlayer(player!);
+
+            if (kickplayer.webData.hasWeb)
+            {
+                Server.NextFrame(() => SetWebStatusAsync(kickplayer));
+                Server.NextFrame(() => ReloadWebDataAsync(kickplayer));
+                //Server.NextFrame(() => startTimer(kickplayer));
+
+                if (kickplayer.webData.webName.Length > 1)
+                {
+                    name = kickplayer.webData.webName;
+                }
+                else
+                {
+                    name = kickplayer.webData.webNick;
+                }
+                kickplayer.Controller.PrintToChat($" \x04[Kick] \x0AČau \x04{name} \x0ATev šobrīd ir \x04{kickplayer.webData.lvl} \x0Alīmenis");
+            }
+            else
+            {
+                kickplayer.Controller.PrintToChat($" \x04[Kick] \x0AČau \x04{kickplayer.PlayerName} \x0ASeko līdzi jaunumiem un uzzini svarīgu informāciju mūsu mājaslapā \x04www.kick.lv");
+            }
+
             return HookResult.Continue;
         });
 
@@ -101,8 +121,21 @@ public partial class Plugin : BasePlugin/*, IPluginConfig<PluginConfig>*/
         {
             CCSPlayerController player = @event.Userid;
 
-            if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
+            if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV || player.IsBot)
                 return HookResult.Continue;
+            KickPlayer? kickplayer = GetKickPlayer(player!);
+
+            if (kickplayer.webData.hasWeb)
+            {
+                Server.NextFrame(() => UpdateXpTime(kickplayer));
+                kickplayer.timer?.Kill();
+            }
+
+            return HookResult.Continue;
+        });
+        RegisterEventHandler((EventRoundEnd @event, GameEventInfo info) =>
+        {
+            Task.Run(SaveAllPlayersDataAsync);
             return HookResult.Continue;
         });
     }
@@ -120,7 +153,7 @@ public partial class Plugin : BasePlugin/*, IPluginConfig<PluginConfig>*/
             case CommandUsage.SERVER_ONLY:
                 if (player != null)
                 {
-                    
+
                     return false;
                 }
                 break;
