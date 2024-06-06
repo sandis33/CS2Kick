@@ -21,15 +21,12 @@ namespace Kick
     {
         public readonly string host = "http://127.0.0.1:9080";
         public readonly string server = "ttt";
-        public readonly string kicklv = "kick.lv";
-        public readonly int kicklvid = 31;
         public readonly string callAdminServer = "CS2PUB";
         private int xpTime = 3600;
 
         public string playername;
-        public string message;
         private int kickID;
-        private string msg;
+        
 
         private string? LogPath;
         private string? FileName;
@@ -49,7 +46,8 @@ namespace Kick
                 if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
                     return HookResult.Continue;
 
-                _ = sendChatMessageAsync(kicklvid, kicklv, $"[green]{HttpUtility.UrlEncode(player.PlayerName)}[/green] Pievienojās serverim");
+                string msg = $"/?id=31&nick={HttpUtility.UrlEncode("kick.lv")}&msg={HttpUtility.UrlEncode($"[green]{player.PlayerName}[/green] pievienojās serverim")}&server={server}";
+                _ = sendChatMessageAsync(msg);
                 return HookResult.Continue;
             });
 
@@ -60,47 +58,50 @@ namespace Kick
                 if (player is null || player.IsBot || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
                     return HookResult.Continue;
 
-
-                _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"[blue]{HttpUtility.UrlEncode(player.PlayerName)}[/blue] izgāja no servera");
+                string msg = $"/?id=31&nick={HttpUtility.UrlEncode("kick.lv")}&msg={HttpUtility.UrlEncode($"[blue]{player.PlayerName}[/blue] izgāja no servera")}&server={server}";
+                _ = sendChatMessageAsync(msg);
                 return HookResult.Continue;
             });
 
             RegisterListener<Listeners.OnMapStart>((mapName) =>
             {
-
-                _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"Karte nomainījās uz [blue]{HttpUtility.UrlEncode(mapName)}[/blue]");
+                string msg = $"/?id=31&nick={HttpUtility.UrlEncode("kick.lv")}&msg={HttpUtility.UrlEncode($"Karte nomainījās uz [blue]{mapName}[/blue]")}&server={server}";
+                _ = sendChatMessageAsync(msg);
             });
         }
         public HookResult OnPlayerSayPublic(CCSPlayerController? player, CommandInfo info)
         {
-            message = info.GetArg(1);
+            string chatMsg = info.GetArg(1);
 
-            if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV || message == null)
+            if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV || chatMsg == null)
                 return HookResult.Continue;
 
             KickPlayer? kickplayer = GetKickPlayer(player!);
             WebData? webData = kickplayer.webData;
             kickID = webData.webID;
             playername = player.PlayerName;
-            if (message.StartsWith("/"))
+            if (chatMsg.StartsWith("/"))
                 return HookResult.Continue;
-            if (message.StartsWith("!"))
+            if (chatMsg.StartsWith("!"))
                 return HookResult.Continue;
-            if (string.IsNullOrWhiteSpace(message))
+            if (string.IsNullOrWhiteSpace(chatMsg))
                 return HookResult.Continue;
 
-            _ = sendChatMessageAsync(kickID, playername, message);
+            string msg = $"/?id={kickID}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(chatMsg)}&server={server}";
+            _ = sendChatMessageAsync(msg);
 
-            string logmsg = ($" {player.SteamID} || {playername}: {message}");
+            string logmsg = ($" {player.SteamID} || {playername}: {chatMsg}");
             chatLog(logmsg);
             return HookResult.Continue;
         }
-        public async Task sendChatMessageAsync(int kickID, string playername, string message)
+        public async Task sendChatMessageAsync(string msg)
         {
             using (var _httpclient = new HttpClient())
             {
-                msg = $"/?id={kickID}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={server}";
+                //Server.PrintToChatAll(msg);
+                //msg = $"/?id={kickID}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={server}";
                 var url = $"{host}{msg}";
+                //Server.PrintToChatAll(url);
                 var response = await _httpclient.GetAsync(url);
             }
         }
@@ -131,19 +132,20 @@ namespace Kick
 
         public void startTimer(KickPlayer kickplayer)
         {
-            if (!kickplayer.IsPlayer)
+            if (!kickplayer.IsPlayer && !kickplayer.webData.hasWeb)
                 return;
 
-            if (!kickplayer.webData.hasWeb)
-                return;
+            string msg = $"$/?type=add_server_xp&userid={kickplayer.webData.webID}";
 
             kickplayer.timer = AddTimer(10, () =>
             {
                 kickplayer.webData.xpTime += 1800;
                 if (kickplayer.webData.xpTime == xpTime)
                 {
+                    kickplayer.Controller.PrintToChat($" \x04[Kick] \x10Saņēmi\x04 25 \x10XP forumā par spēlēšanu serverī");
                     kickplayer.webData.xpTime = 0;
-                    Server.NextFrame(() => rewardXP(kickplayer));
+                    _ = sendChatMessageAsync(msg);
+                    //kickplayer.Controller.PrintToChat("done");
                     Server.NextFrame(() => UpdateXpTime(kickplayer));
                 }
             }, TimerFlags.REPEAT);

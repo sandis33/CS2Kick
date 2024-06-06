@@ -19,17 +19,12 @@ using System.Xml.Linq;
 
 
 namespace Kick;
-public partial class Plugin : BasePlugin/*, IPluginConfig<PluginConfig>*/
+public partial class Plugin : BasePlugin
 {
-    //public required PluginConfig Config { get; set; } = new PluginConfig();
     public required string _ModuleDirectory { get; set; }
 
     public List<KickPlayer> KickPlayers = new List<KickPlayer>();
 
-    //public void OnConfigParsed(PluginConfig config)
-    //{
-    //    this.Config = config;
-    //}
     public override void Load(bool hotReload)
     {
         _ModuleDirectory = ModuleDirectory;
@@ -46,9 +41,7 @@ public partial class Plugin : BasePlugin/*, IPluginConfig<PluginConfig>*/
     }
     public void Initialize_Events()
     {
-        string kicklv = "kick.lv";
-        string kicklvid = "31";
-        string msg;
+        // bot id = 31 , nick kick.lv
 
         RegisterEventHandler((EventPlayerActivate @event, GameEventInfo info) =>
         {
@@ -97,7 +90,7 @@ public partial class Plugin : BasePlugin/*, IPluginConfig<PluginConfig>*/
             {
                 Server.NextFrame(() => SetWebStatusAsync(kickplayer));
                 Server.NextFrame(() => ReloadWebDataAsync(kickplayer));
-                //Server.NextFrame(() => startTimer(kickplayer));
+                Server.NextFrame(() => startTimer(kickplayer));
 
                 if (kickplayer.webData.webName.Length > 1)
                 {
