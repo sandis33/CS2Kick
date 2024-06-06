@@ -7,4 +7,4 @@
 ### To Do:
 - Item reward in backpack for time played
 - IEiro reward for time played
-- CallAdmin panel and message to Web Chat
+- CallAdmin panel
