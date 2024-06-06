@@ -26,7 +26,10 @@ namespace Kick
 
         public string playername;
         private int kickID;
-        
+
+        //public static IKickShared? kick;
+
+
 
         private string? LogPath;
         private string? FileName;
@@ -67,7 +70,14 @@ namespace Kick
             {
                 string msg = $"/?id=31&nick={HttpUtility.UrlEncode("kick.lv")}&msg={HttpUtility.UrlEncode($"Karte nomainījās uz [blue]{mapName}[/blue]")}&server={server}";
                 _ = sendChatMessageAsync(msg);
+                KickPlayers.Clear();
             });
+        }
+        public HookResult EventCsWinPanelMatchHandler(EventCsWinPanelMatch @event, GameEventInfo info)
+        {
+
+
+            return HookResult.Continue;
         }
         public HookResult OnPlayerSayPublic(CCSPlayerController? player, CommandInfo info)
         {
@@ -87,8 +97,17 @@ namespace Kick
             if (string.IsNullOrWhiteSpace(chatMsg))
                 return HookResult.Continue;
 
-            string msg = $"/?id={kickID}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(chatMsg)}&server={server}";
-            _ = sendChatMessageAsync(msg);
+            if (kickplayer.webData.hasWeb)
+            {
+                string msg = $"/?id={kickID}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(chatMsg)}&server={server}";
+                _ = sendChatMessageAsync(msg);
+            }
+            else
+            {
+                string msg = $"/?nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(chatMsg)}&server={server}";
+                _ = sendChatMessageAsync(msg);
+            }
+            
 
             string logmsg = ($" {player.SteamID} || {playername}: {chatMsg}");
             chatLog(logmsg);
@@ -114,41 +133,73 @@ namespace Kick
             }
 
         }
-        public async Task rewardXP(KickPlayer kickplayer)
+        //public async Task rewardXP(KickPlayer kickplayer)
+        //{
+
+        //    string msg = $"/?type=add_server_xp&userid={kickplayer.webData.webID}";
+        //    using (var _rewardXp = new HttpClient())
+        //    {
+        //        var url = $"{host}{msg}";
+        //        kickplayer.Controller.PrintToChat(url);
+        //        var response = await _rewardXp.GetAsync(url);
+
+        //        //kickplayer.Controller.PrintToChat($" \x04[Kick] \x10Saņēmi\x04 25 \x10XP forumā par spēlēšanu serverī");
+        //        //kickplayer.Controller.PrintToChat("done");
+        //    }
+
+        //}
+
+        //public void startItemTimer(KickPlayer kickplayer)
+        //{
+        //    if (!kickplayer.IsPlayer && !kickplayer.IsValid && !kickplayer.webData.hasWeb)
+        //        return;
+        //    kickplayer.itemTimer = AddTimer(1, () =>
+        //    {
+        //        kickplayer.webData.itemChance += 1;
+        //    }, TimerFlags.REPEAT);
+        //}
+
+        public void startXpTimer(KickPlayer kickplayer)
         {
 
-            string msg = $"/?type=add_server_xp&userid={kickplayer.webData.webID}";
-            using (var _rewardXp = new HttpClient())
-            {
-                var url = $"{host}{msg}";
-                kickplayer.Controller.PrintToChat(url);
-                var response = await _rewardXp.GetAsync(url);
 
-                //kickplayer.Controller.PrintToChat($" \x04[Kick] \x10Saņēmi\x04 25 \x10XP forumā par spēlēšanu serverī");
-                //kickplayer.Controller.PrintToChat("done");
-            }
-
-        }
-
-        public void startTimer(KickPlayer kickplayer)
-        {
             if (!kickplayer.IsPlayer && !kickplayer.webData.hasWeb)
                 return;
 
-            string msg = $"$/?type=add_server_xp&userid={kickplayer.webData.webID}";
+            string msg = $"/?type=add_server_xp&userid={kickplayer.webData.webID}&server=cs2";
 
-            kickplayer.timer = AddTimer(10, () =>
+            kickplayer.XPtimer = AddTimer(10, () =>
             {
-                kickplayer.webData.xpTime += 1800;
+                kickplayer.webData.xpTime += 10;
                 if (kickplayer.webData.xpTime == xpTime)
                 {
-                    kickplayer.Controller.PrintToChat($" \x04[Kick] \x10Saņēmi\x04 25 \x10XP forumā par spēlēšanu serverī");
+                    kickplayer.Controller.PrintToChat($" \x04[Kick] \x10Saņēmi\x04 10 \x10XP forumā par spēlēšanu serverī");
                     kickplayer.webData.xpTime = 0;
                     _ = sendChatMessageAsync(msg);
-                    //kickplayer.Controller.PrintToChat("done");
                     Server.NextFrame(() => UpdateXpTime(kickplayer));
                 }
             }, TimerFlags.REPEAT);
+
+        }
+
+        public void rewardItems(CCSPlayerController player)
+        {
+            Server.PrintToChatAll("Map End");
+
+            KickPlayer? kickplayer = GetKickPlayer(player!);
+            
+            if (!kickplayer.IsPlayer)
+                return;
+
+            kickplayer.itemTimer.Kill();
+            kickplayer.itemTimer = null;
+
+            var award = new
+            {
+                id = kickplayer.webData.webID,
+                chance = kickplayer.webData.itemChance,
+            };
+
 
         }
 
