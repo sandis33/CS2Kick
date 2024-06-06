@@ -42,7 +42,7 @@ public partial class Plugin : BasePlugin
     public void Initialize_Events()
     {
         // bot id = 31 , nick kick.lv
-
+        RegisterEventHandler<EventCsWinPanelMatch>(EventCsWinPanelMatchHandler);
         RegisterEventHandler((EventPlayerActivate @event, GameEventInfo info) =>
         {
             CCSPlayerController? player = @event.Userid;
@@ -60,13 +60,14 @@ public partial class Plugin : BasePlugin
             WebData? webData = null;
             webData = new WebData
             {
+                hasWeb = false,
                 webID = 0,
                 webNick = "",
                 webName = "",
                 xp = 0,
                 lvl = 0,
                 xpTime = 0,
-                hasWeb = false,
+                itemChance = 0,
             };
 
             kickplayer.webData = webData;
@@ -90,7 +91,7 @@ public partial class Plugin : BasePlugin
             {
                 Server.NextFrame(() => SetWebStatusAsync(kickplayer));
                 Server.NextFrame(() => ReloadWebDataAsync(kickplayer));
-                Server.NextFrame(() => startTimer(kickplayer));
+                Server.NextFrame(() => startXpTimer(kickplayer));
 
                 if (kickplayer.webData.webName.Length > 1)
                 {
@@ -121,7 +122,7 @@ public partial class Plugin : BasePlugin
             if (kickplayer.webData.hasWeb)
             {
                 Server.NextFrame(() => UpdateXpTime(kickplayer));
-                kickplayer.timer?.Kill();
+                kickplayer.XPtimer?.Kill();
             }
 
             return HookResult.Continue;

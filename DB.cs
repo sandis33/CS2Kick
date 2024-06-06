@@ -81,13 +81,14 @@ namespace Kick
             WebData? webData = null;
             webData = new WebData
             {
+                hasWeb = true,
                 webID = row.id,
                 webNick = row.username,
                 webName = row.name,
                 lvl = row.lvl,
                 xp = row.xp,
                 xpTime = row.xp_time,
-                hasWeb = true,
+                itemChance = 0,
             };
 
             kickplayer.webData = webData;

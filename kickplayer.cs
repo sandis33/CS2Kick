@@ -16,7 +16,8 @@ namespace Kick.Player
         public readonly ulong SteamID;
         public readonly string SteamID2;
         public readonly string PlayerName;
-        public CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+        public CounterStrikeSharp.API.Modules.Timers.Timer? XPtimer = null;
+        public CounterStrikeSharp.API.Modules.Timers.Timer? itemTimer = null;
 
         //** ? Data */
         public WebData? webData { get; set; }
