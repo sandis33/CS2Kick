@@ -15,6 +15,7 @@ namespace Kick
     using Kick.Player;
     using static Kick.ModuleWeb;
     using CounterStrikeSharp.API.Modules.Menu;
+    using CounterStrikeSharp.API.Modules.Timers;
 
     public sealed partial class Plugin : BasePlugin
     {
@@ -22,11 +23,12 @@ namespace Kick
         public readonly string server = "ttt";
         public readonly string kicklv = "kick.lv";
         public readonly int kicklvid = 31;
-        
+        public readonly string callAdminServer = "CS2PUB";
+        private int xpTime = 3600;
 
         public string playername;
         public string message;
-        private int kickid;
+        private int kickID;
         private string msg;
 
         private string? LogPath;
@@ -35,9 +37,9 @@ namespace Kick
 
         public void Initialize_Chat()
         {
-            //AddCommand("css_web", "web test", OnCommandWeb);
+            AddCommand("css_web", "web test", OnCommandWeb);
             AddCommand("webchat", "Send message from web", OnCommandWebChat);
-            //AddCommand("css_calladmin", "Izsauc adminu", OnCommandCalladmin);
+            AddCommand("css_calladmin", "Makes a call for admin", OnCommandCalladmin);
             AddCommandListener("say", OnPlayerSayPublic, HookMode.Post);
 
             RegisterEventHandler((EventPlayerConnectFull @event, GameEventInfo info) =>
@@ -47,8 +49,8 @@ namespace Kick
                 if (player is null || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
                     return HookResult.Continue;
 
-                _ = sendChatMessageAsync(kicklvid, kicklv, $"[green]{player.PlayerName}[/green] Pievienojās serverim");
-                    return HookResult.Continue;
+                _ = sendChatMessageAsync(kicklvid, kicklv, $"[green]{HttpUtility.UrlEncode(player.PlayerName)}[/green] Pievienojās serverim");
+                return HookResult.Continue;
             });
 
             RegisterEventHandler((EventPlayerDisconnect @event, GameEventInfo info) =>
@@ -58,15 +60,15 @@ namespace Kick
                 if (player is null || player.IsBot || !player.IsValid || !player.PlayerPawn.IsValid || player.IsHLTV)
                     return HookResult.Continue;
 
-                
-                _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"[blue]{player.PlayerName}[/blue] izgāja no servera");
+
+                _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"[blue]{HttpUtility.UrlEncode(player.PlayerName)}[/blue] izgāja no servera");
                 return HookResult.Continue;
             });
 
             RegisterListener<Listeners.OnMapStart>((mapName) =>
             {
-            
-            _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"Karte nomainījās uz [blue]{mapName}[/blue]");
+
+                _ = sendChatMessageAsync(kicklvid, kicklv, msg = $"Karte nomainījās uz [blue]{HttpUtility.UrlEncode(mapName)}[/blue]");
             });
         }
         public HookResult OnPlayerSayPublic(CCSPlayerController? player, CommandInfo info)
@@ -78,60 +80,109 @@ namespace Kick
 
             KickPlayer? kickplayer = GetKickPlayer(player!);
             WebData? webData = kickplayer.webData;
-            kickid = webData.webID;
+            kickID = webData.webID;
             playername = player.PlayerName;
             if (message.StartsWith("/"))
                 return HookResult.Continue;
             if (message.StartsWith("!"))
                 return HookResult.Continue;
-            if (string.IsNullOrWhiteSpace(message)) 
+            if (string.IsNullOrWhiteSpace(message))
                 return HookResult.Continue;
-            
-            _ = sendChatMessageAsync(kickid, playername, message);
-            
+
+            _ = sendChatMessageAsync(kickID, playername, message);
+
             string logmsg = ($" {player.SteamID} || {playername}: {message}");
             chatLog(logmsg);
             return HookResult.Continue;
         }
-        public async Task sendChatMessageAsync(int kickid, string playername, string message)
+        public async Task sendChatMessageAsync(int kickID, string playername, string message)
         {
             using (var _httpclient = new HttpClient())
             {
-                msg = $"/?id={kickid}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={HttpUtility.UrlEncode(server)}";
+                msg = $"/?id={kickID}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={server}";
                 var url = $"{host}{msg}";
                 var response = await _httpclient.GetAsync(url);
             }
         }
+        public async Task callAdminAsync(string msg)
+        {
+            using (var calladmin = new HttpClient())
+            {
+                var url = $"{host}{msg}";
+                var response = await calladmin.GetAsync(url);
+            }
 
-        //public async Task callAdminAsync(int kickid, string playername, string message, bool hasWeb)
-        //{
-        //    using (var _httpclient = new HttpClient())
-        //    {
-        //        if (hasWeb)
-        //        {
-        //            msg =
-        //                $"/?id={kickid}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={HttpUtility.UrlEncode(server)}";
-        //        }
-        //        else
-        //        {
-        //            msg =
-        //                $"/?nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(message)}&server={HttpUtility.UrlEncode(server)}";
-        //        }
+        }
+        public async Task rewardXP(KickPlayer kickplayer)
+        {
 
-        //        var url = $"{host}{msg}";
-        //        var response = await _httpclient.GetAsync(url);
-        //    }
-        //}
+            string msg = $"/?type=add_server_xp&userid={kickplayer.webData.webID}";
+            using (var _rewardXp = new HttpClient())
+            {
+                var url = $"{host}{msg}";
+                kickplayer.Controller.PrintToChat(url);
+                var response = await _rewardXp.GetAsync(url);
+
+                //kickplayer.Controller.PrintToChat($" \x04[Kick] \x10Saņēmi\x04 25 \x10XP forumā par spēlēšanu serverī");
+                //kickplayer.Controller.PrintToChat("done");
+            }
+
+        }
+
+        public void startTimer(KickPlayer kickplayer)
+        {
+            if (!kickplayer.IsPlayer)
+                return;
+
+            if (!kickplayer.webData.hasWeb)
+                return;
+
+            kickplayer.timer = AddTimer(10, () =>
+            {
+                kickplayer.webData.xpTime += 1800;
+                if (kickplayer.webData.xpTime == xpTime)
+                {
+                    kickplayer.webData.xpTime = 0;
+                    Server.NextFrame(() => rewardXP(kickplayer));
+                    Server.NextFrame(() => UpdateXpTime(kickplayer));
+                }
+            }, TimerFlags.REPEAT);
+
+        }
+
+        public void OnCommandCalladmin(CCSPlayerController player, CommandInfo info)
+        {
+            KickPlayer? kickplayer = GetKickPlayer(player!);
+            if (!kickplayer.IsPlayer)
+                return;
+            playername = kickplayer.PlayerName;
+            //	[red]Lxst[/red] sauc adminu uz [red]JB[/red] serveri! Parkapejs: [red]Ass[/red] Iemesls: [red]Cheats[/red]
+            string calladminmsg = $"[red]{HttpUtility.UrlEncode(playername)}[/red] sauc adminu uz [red]{callAdminServer}[/red] serveri!";
+            string msg = $"/?&nick=CALLADMIN&msg={calladminmsg}&server={server}";
+            _ = callAdminAsync(msg);
+        }
+
         public void OnCommandWebChat(CCSPlayerController player, CommandInfo info)
         {
-            if(!CommandHelper(player, info, CommandUsage.SERVER_ONLY, 2,"<name> <msg>", permission: "@css/rcon"))
-               return;
+            if (!CommandHelper(player, info, CommandUsage.SERVER_ONLY, 2, "<name> <msg>", permission: "@css/rcon"))
+                return;
             string name = info.GetArg(1);
             string msg = info.GetArg(2);
-            
+
             Server.PrintToChatAll($" \x04[WEB] \x0F{name} \x10: {msg}");
-            
-            
+
+
+        }
+
+        public void OnCommandWeb(CCSPlayerController player, CommandInfo info)
+        {
+            KickPlayer? kp = GetKickPlayer(player!);
+            info.ReplyToCommand($"web: {kp.webData.hasWeb.ToString()}");
+            info.ReplyToCommand(kp.webData.webID.ToString());
+            info.ReplyToCommand(kp.webData.webNick);
+            info.ReplyToCommand(kp.webData.lvl.ToString());
+            info.ReplyToCommand(kp.webData.xp.ToString());
+            info.ReplyToCommand(kp.webData.xpTime.ToString());
         }
 
         //////////////////////////////
@@ -145,17 +196,17 @@ namespace Kick
 
             if (!Directory.Exists(LogPath))
             {
-            Directory.CreateDirectory(LogPath);
+                Directory.CreateDirectory(LogPath);
             }
 
             if (!File.Exists(FilePath))
             {
-            File.Create(FilePath);
+                File.Create(FilePath);
             }
 
             using (StreamWriter writer = File.AppendText(FilePath))
             {
-            writer.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + logmsg);
+                writer.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + logmsg);
             }
         }
     }
