@@ -1,11 +1,4 @@
-﻿using CounterStrikeSharp.API.Core.Plugin;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
+﻿using Microsoft.Extensions.Logging;
 
 namespace Kick
 {
@@ -14,17 +7,16 @@ namespace Kick
         public class WebData
         {
             public required bool hasWeb { get; set; }
-            public required int webID { get; set; }
-            public required string webNick { get; set; }
-            public required string webName { get; set; }
-            public required int lvl { get; set; }
-            public required int xp { get; set; }
-            public required int xpTime { get; set; }
+            public int webID { get; set; }
+            public string webNick { get; set; }
+            public string webName { get; set; }
+            public int lvl { get; set; }
+            public int xp { get; set; }
+            public int xpTime { get; set; }
             public required int itemChance { get; set; }
-
-        }
+            public string username_seo { get; set; }
+    }
         public required Plugin plugin;
         public readonly ILogger<ModuleWeb> Logger;
-
     }
 }

@@ -1,15 +1,8 @@
 ﻿using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using static Kick.ModuleWeb;
 
-
 namespace Kick.Player
-{
+{ 
     public class KickPlayer
     {
         public readonly CCSPlayerController Controller;
@@ -18,8 +11,8 @@ namespace Kick.Player
         public readonly string PlayerName;
         public CounterStrikeSharp.API.Modules.Timers.Timer? XPtimer = null;
         public CounterStrikeSharp.API.Modules.Timers.Timer? itemTimer = null;
+        public CounterStrikeSharp.API.Modules.Timers.Timer? CDTimer = null;
 
-        //** ? Data */
         public WebData? webData { get; set; }
 
         public KickPlayer(CCSPlayerController playerController)

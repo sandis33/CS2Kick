@@ -1,19 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Runtime;
-using System.Text;
-using System.Threading.Tasks;
-using CounterStrikeSharp.API;
+﻿using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Entities;
 using Dapper;
 using MySqlConnector;
 using Kick.Player;
 using Microsoft.Extensions.Logging;
 using static Kick.ModuleWeb;
-using System.Web;
 
 namespace Kick
 {
@@ -52,7 +43,7 @@ namespace Kick
         public async Task LoadWebDataAsync(KickPlayer kickplayer)
         {
             string combinedQuery = $@"
-                SELECT id,username,name,lvl,xp,xp_time,steamid2 FROM web_users WHERE steamid2 = @steamid2";
+                SELECT id,username,username_seo,name,lvl,xp,xp_time,steamid2 FROM web_users WHERE steamid2 = @steamid2";
 
             try
             {
@@ -68,7 +59,6 @@ namespace Kick
                     {
                         Server.NextFrame(() => LoadPlayerRowToCache(kickplayer, row));
                     }
-                    Server.NextFrame(() => SetWebStatusAsync(kickplayer));
                 }
             }
             catch (Exception ex)
@@ -84,11 +74,13 @@ namespace Kick
                 hasWeb = true,
                 webID = row.id,
                 webNick = row.username,
+                username_seo = row.username_seo,
                 webName = row.name,
                 lvl = row.lvl,
                 xp = row.xp,
                 xpTime = row.xp_time,
                 itemChance = 0,
+                
             };
 
             kickplayer.webData = webData;
@@ -98,12 +90,11 @@ namespace Kick
             Int32 unixTimestamp = (int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
             string last_activity = unixTimestamp.ToString();
 
-            string combinedQuery = $@"
-                UPDATE web_users SET current_module = @current_module, last_activity = @last_activity WHERE id = @kickID";
+            string combinedQuery = $@"UPDATE web_users SET current_module = @current_module, last_activity = @last_activity WHERE id = @kickID";
 
             try
             {
-                using (var connection = CreateConnection(/*Config*/))
+                using (var connection = CreateConnection())
                 {
                     await connection.OpenAsync();
 
@@ -114,24 +105,13 @@ namespace Kick
 
                     var rows = await connection.QueryAsync(combinedQuery, parameters);
 
-                    Server.NextFrame(() => UpdateWebStatusAsync(kickplayer.webData.webID));
+                    Server.NextFrame(() => WebGetReqAsync($"/?type=update_location&userid={kickplayer.webData.webID}&online=0"));
                 }
             }
             catch (Exception ex)
             {
                 Server.NextFrame(() => Logger.LogError("ERROR SETWEBSTATUS: {ErrorMessage}", ex.Message));
             }
-        }
-
-        public async Task UpdateWebStatusAsync(int kickID)
-        {
-            using (var _httpclient = new HttpClient())
-            {
-                string msg = $"/?type=update_location&userid={kickID}&online=0";
-                var url = $"{host}{msg}";
-                var response = await _httpclient.GetAsync(url);
-            }
-
         }
 
         public async Task ReloadWebDataAsync(KickPlayer kickplayer)
@@ -159,8 +139,7 @@ namespace Kick
         }
         public async Task UpdateXpTime(KickPlayer kickplayer)
         {
-            string combinedQuery = $@"
-                UPDATE web_users SET xp_time = @xptime WHERE id = @kickid";
+            string combinedQuery = $@"UPDATE web_users SET xp_time = @xptime WHERE id = @kickid";
 
             try
             {
@@ -211,6 +190,30 @@ namespace Kick
             }
 
             KickPlayers = new List<KickPlayer>(KickPlayers.Where(player => player.IsValid));
+        }
+
+        public async Task UpdateMonitorsAsync(string update)
+        {
+            string query = $@"UPDATE cs_monitori SET data = @data, STAMP = @STAMP WHERE id = 9";
+            Int32 unixTimestamp = (int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
+            string STAMP = unixTimestamp.ToString();
+            try
+            {
+                using (var connection = CreateConnection())
+                {
+                    await connection.OpenAsync();
+
+                    var parameters = new DynamicParameters();
+                    parameters.Add("@data", update);
+                    parameters.Add("@STAMP", STAMP);
+
+                    var rows = await connection.QueryAsync(query, parameters);
+                }
+            }
+            catch (Exception ex)
+            {
+                Server.NextFrame(() => Logger.LogError("An error occurred while updating MONITOR: {ErrorMessage}", ex.Message));
+            }
         }
     }
 }
