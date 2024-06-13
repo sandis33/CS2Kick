@@ -111,6 +111,7 @@ namespace Kick
             using (var _httpclient = new HttpClient())
             {
                 var url = $"{host}{msg}";
+                //Server.PrintToChatAll(url);
                 var response = await _httpclient.GetAsync(url);
             }
         }

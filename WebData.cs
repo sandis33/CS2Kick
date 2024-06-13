@@ -18,5 +18,7 @@ namespace Kick
     }
         public required Plugin plugin;
         public readonly ILogger<ModuleWeb> Logger;
+        //public required PluginConfig Config;
+        public readonly IPluginContext PluginContext;
     }
 }

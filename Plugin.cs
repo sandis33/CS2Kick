@@ -21,7 +21,12 @@ public partial class Plugin : BasePlugin
         Initialize_Chat();
         Initialize_Events();
     }
+    public override void Unload(bool hotReload)
+    {
+        Task.Run(SaveAllPlayersDataAsync);
 
+        this.Dispose();
+    }
     public void Initialize_Events()
     {
         RegisterListener<Listeners.OnMapStart>(ListenerOnMapStartHandler);
