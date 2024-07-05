@@ -8,37 +8,27 @@ using static Kick.ModuleWeb;
 
 namespace Kick
 {
-    public sealed partial class Plugin : BasePlugin
+    public partial class KickCS2
     {
-        public MySqlConnection CreateConnection()
+        public static MySqlConnection CreateConnection()
         {
-            bool debugserv = false;
-
-            if (!debugserv)
+            var builder = new MySqlConnectionStringBuilder
             {
-                MySqlConnectionStringBuilder builder = new MySqlConnectionStringBuilder
-                {
-                    Server = "127.0.0.1",
-                    UserID = "kick_cs2",
-                    Password = "ymMxFd7DC#tBz",
-                    Database = "kick_web",
-                    Port = (uint)3306,
+                Server = "127.0.0.1",
+                UserID = "kick_cs2",
+                Password = "ymMxFd7DC#tBz",
+                Database = "kick_web",
+                Port = (uint)3306,
 
-                };
-                return new MySqlConnection(builder.ToString());
-            }
-            else
-            {
-                MySqlConnectionStringBuilder builder = new MySqlConnectionStringBuilder
-                {
-                    Server = "127.0.0.1",
-                    UserID = "root",
-                    Password = "parole",
-                    Database = "kick_web",
-                    Port = (uint)3306,
-                };
-                return new MySqlConnection(builder.ToString());
-            }
+            };
+            //{
+            //    Server = "127.0.0.1",
+            //    UserID = "root",
+            //    Password = "parole",
+            //    Database = "kick_web",
+            //    Port = (uint)3306,
+            //};
+            return new MySqlConnection(builder.ToString());           
         }
         public async Task LoadWebDataAsync(KickPlayer kickplayer)
         {
@@ -47,18 +37,14 @@ namespace Kick
 
             try
             {
-                using (var connection = CreateConnection())
+                using var connection = CreateConnection();
+                await connection.OpenAsync();
+                var parameters = new DynamicParameters();
+                parameters.Add("@steamid2", kickplayer.SteamID2);
+                var rows = await connection.QueryAsync(combinedQuery, parameters);
+                foreach (var row in rows)
                 {
-                    await connection.OpenAsync();
-
-                    var parameters = new DynamicParameters();
-                    parameters.Add("@steamid2", kickplayer.SteamID2);
-
-                    var rows = await connection.QueryAsync(combinedQuery, parameters);
-                    foreach (var row in rows)
-                    {
-                        Server.NextFrame(() => LoadPlayerRowToCache(kickplayer, row));
-                    }
+                    Server.NextFrame(() => LoadPlayerRowToCache(kickplayer, row));
                 }
             }
             catch (Exception ex)
@@ -66,10 +52,10 @@ namespace Kick
                 Server.NextFrame(() => Logger.LogError("An error occurred while loading player cache: {ErrorMessage}", ex.Message));
             }
         }
-        public void LoadPlayerRowToCache(KickPlayer kickplayer, dynamic row)
+        public static void LoadPlayerRowToCache(KickPlayer kickplayer, dynamic row)
         {
-            WebData? webData = null;
-            webData = new WebData
+            
+            var WebData = new WebData
             {
                 hasWeb = true,
                 webID = row.id,
@@ -83,7 +69,7 @@ namespace Kick
                 
             };
 
-            kickplayer.webData = webData;
+            kickplayer.WebData = WebData;
         }
         public async Task SetWebStatusAsync(KickPlayer kickplayer)
         {
@@ -94,19 +80,14 @@ namespace Kick
 
             try
             {
-                using (var connection = CreateConnection())
-                {
-                    await connection.OpenAsync();
-
-                    var parameters = new DynamicParameters();
-                    parameters.Add("@kickID", kickplayer.webData.webID);
-                    parameters.Add("@current_module", "play_2cs1");
-                    parameters.Add("@last_activity", last_activity);
-
-                    var rows = await connection.QueryAsync(combinedQuery, parameters);
-
-                    Server.NextFrame(() => WebGetReqAsync($"/?type=update_location&userid={kickplayer.webData.webID}&online=0"));
-                }
+                using var connection = CreateConnection();
+                await connection.OpenAsync();
+                var parameters = new DynamicParameters();
+                parameters.Add("@kickID", kickplayer.WebData.webID);
+                parameters.Add("@current_module", "play_2cs1");
+                parameters.Add("@last_activity", last_activity);
+                var rows = await connection.QueryAsync(combinedQuery, parameters);
+                Server.NextFrame(async () => await WebGetReqAsync($"/?type=update_location&userid={kickplayer.WebData.webID}&online=0"));
             }
             catch (Exception ex)
             {
@@ -121,16 +102,12 @@ namespace Kick
 
             try
             {
-                using (var connection = CreateConnection())
-                {
-                    await connection.OpenAsync();
-
-                    var parameters = new DynamicParameters();
-                    parameters.Add("@kickID", kickplayer.webData.webID);
-
-                    var results = await connection.QueryFirstAsync(query, parameters);
-                    kickplayer.webData.xpTime = results.xp_time;
-                }
+                using var connection = CreateConnection();
+                await connection.OpenAsync();
+                var parameters = new DynamicParameters();
+                parameters.Add("@kickID", kickplayer.WebData.webID);
+                var results = await connection.QueryFirstAsync(query, parameters);
+                kickplayer.WebData.xpTime = results.xp_time;
             }
             catch (Exception ex)
             {
@@ -143,16 +120,12 @@ namespace Kick
 
             try
             {
-                using (var connection = CreateConnection(/*Config*/))
-                {
-                    await connection.OpenAsync();
-
-                    var parameters = new DynamicParameters();
-                    parameters.Add("@kickid", kickplayer.webData.webID);
-                    parameters.Add("@xptime", kickplayer.webData.xpTime);
-
-                    var rows = await connection.QueryAsync(combinedQuery, parameters);
-                }
+                using var connection = CreateConnection();
+                await connection.OpenAsync();
+                var parameters = new DynamicParameters();
+                parameters.Add("@kickid", kickplayer.WebData.webID);
+                parameters.Add("@xptime", kickplayer.WebData.xpTime);
+                var rows = await connection.QueryAsync(combinedQuery, parameters);
             }
             catch (Exception ex)
             {
@@ -165,27 +138,25 @@ namespace Kick
             {
                 await connection.OpenAsync();
 
-                using (var save = await connection.BeginTransactionAsync())
+                using var save = await connection.BeginTransactionAsync();
+                try
                 {
-                    try
+                    foreach (KickPlayer kickplayer in KickPlayers.ToList())
                     {
-                        foreach (KickPlayer kickplayer in KickPlayers.ToList())
-                        {
-                            if (!kickplayer.IsValid || !kickplayer.IsPlayer)
-                                continue;
+                        if (!kickplayer.IsValid || !kickplayer.IsPlayer)
+                            continue;
 
-                            if (kickplayer.webData.hasWeb)
-                                await UpdateXpTime(kickplayer);
-                        }
+                        if (kickplayer.WebData.hasWeb)
+                            await UpdateXpTime(kickplayer);
+                    }
 
-                        await save.CommitAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        await save.RollbackAsync();
-                        Server.NextFrame(() => Logger.LogError("ERROR while saving all players WEB data: {ErrorMessage}", ex.Message));
-                        throw;
-                    }
+                    await save.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await save.RollbackAsync();
+                    Server.NextFrame(() => Logger.LogError("ERROR while saving all players WEB data: {ErrorMessage}", ex.Message));
+                    throw;
                 }
             }
 
@@ -199,16 +170,12 @@ namespace Kick
             string STAMP = unixTimestamp.ToString();
             try
             {
-                using (var connection = CreateConnection())
-                {
-                    await connection.OpenAsync();
-
-                    var parameters = new DynamicParameters();
-                    parameters.Add("@data", update);
-                    parameters.Add("@STAMP", STAMP);
-
-                    var rows = await connection.QueryAsync(query, parameters);
-                }
+                using var connection = CreateConnection();
+                await connection.OpenAsync();
+                var parameters = new DynamicParameters();
+                parameters.Add("@data", update);
+                parameters.Add("@STAMP", STAMP);
+                var rows = await connection.QueryAsync(query, parameters);
             }
             catch (Exception ex)
             {

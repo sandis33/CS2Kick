@@ -16,9 +16,7 @@ namespace Kick
             public required int itemChance { get; set; }
             public string username_seo { get; set; }
     }
-        public required Plugin plugin;
+        public required KickCS2 plugin;
         public readonly ILogger<ModuleWeb> Logger;
-        //public required PluginConfig Config;
-        public readonly IPluginContext PluginContext;
     }
 }

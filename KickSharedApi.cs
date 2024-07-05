@@ -3,7 +3,7 @@ using CounterStrikeSharp.API.Core.Capabilities;
 
 namespace Kick
 {
-    public sealed partial class Plugin
+    public sealed partial class KickCS2
     {
         public static PluginCapability<IKickSharedApi> Capability_KickSharedAPI { get; } = new("Kick:sharedapi");
 
@@ -13,9 +13,9 @@ namespace Kick
         }
         public class KickSharedApiHandler : IKickSharedApi
         {
-            public Plugin plugin;
+            public KickCS2 plugin;
 
-            public KickSharedApiHandler(Plugin plugin)
+            public KickSharedApiHandler(KickCS2 plugin)
             {
                 this.plugin = plugin;
             }

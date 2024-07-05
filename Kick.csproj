@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="CallAdmin.cs" />
     <Compile Remove="Config.cs" />
     <Compile Remove="ModuleWeb.cs" />
   </ItemGroup>

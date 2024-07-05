@@ -13,14 +13,16 @@ namespace Kick.Player
         public CounterStrikeSharp.API.Modules.Timers.Timer? itemTimer = null;
         public CounterStrikeSharp.API.Modules.Timers.Timer? CDTimer = null;
 
-        public WebData? webData { get; set; }
+        public WebData WebData { get; set; }
 
         public KickPlayer(CCSPlayerController playerController)
         {
             Controller = playerController;
             SteamID = playerController.SteamID;
-            SteamID2 = playerController.AuthorizedSteamID.SteamId2;
             PlayerName = playerController.PlayerName;
+            if (playerController.AuthorizedSteamID == null)
+                throw new ArgumentNullException(nameof(playerController.AuthorizedSteamID), "AuthorizedSteamID cannot be null");
+            SteamID2 = playerController.AuthorizedSteamID.SteamId2;
         }
 
         public bool IsValid

@@ -12,57 +12,53 @@ using System.Text;
 
 namespace Kick
 { 
-    public sealed partial class Plugin
+    public partial class KickCS2
     {
-        public readonly string host = "http://127.0.0.1:9080";
-        public readonly string server = "ttt";
-        public readonly string callAdminServer = "CS2PUB";
-        private int xpTime = 3600;
+        private static readonly string host = "http://127.0.0.1:9080";
+        private readonly string server = "ttt";
+        private static readonly string callAdminServer = "CS2 PUB";
+        public readonly int xpTime = 3600;
 
         public int ctWins = 0;
         public int tsWins = 0;
-        public int maxPlayers { get; set; }
-        public string map { get; set; }
-        public class user
+        public int MaxPlayers { get; set; }
+        public string Map { get; set; }
+        public class User
         {
-            public int id { get; set; }
+            public int Id { get; set; }
             public int chance { get; set; }
         }
 
-        public class userList
+        public class UserList
         {
-            public List<user> users { get; set; }
-            public List<guest> guests { get; set; }
+            public List<User> users { get; set; }
+            public List<Guest> guests { get; set; }
         }
 
-        public class guest
+        public class Guest
         {
             public string name { get; set; }
             public int chance { get; set; }
         }
-
-        public void Initialize_Chat()
+        public int playersOn
         {
-            CreateLog();
-            //AddCommand("css_web", "web test", OnCommandWeb);
-            //AddCommand("css_get", "web test", OnCommandTestGet);
-            AddCommand("webchat", "Send message from web", OnCommandWebChatRcon);
-            AddCommand("web_pm_say", "Sends pm to player from web", OnCommadWebPmSay);
-            AddCommand("css_calladmin", "Makes a call for admin", OnCommandCalladmin);
-            AddCommand("css_help", "List available commands",[CommandHelper(0, whoCanExecute: CommandUsage.CLIENT_ONLY)] (player, info) =>
+            get
+            {
+                int players = 0;
+                foreach (var player in Utilities.GetPlayers())
                 {
-                    if (player == null || !player.IsValid || player.PlayerPawn.Value == null)
-                        return;
-
-                    info.ReplyToCommand($" \x0A[\x04Kick.lv\x0A] \x04Pieejamās komandas");
-                    info.ReplyToCommand($" --- \x0AStatu komadas: \x04!rank !top !time");
-                    info.ReplyToCommand($" --- \x0AVisi pieejamie rangi: \x04!ranks");
-                    info.ReplyToCommand($" --- \x0APaziņojumi par punktu izmaiņām: \x04!points");
-                    info.ReplyToCommand($" --- \x0AIzsaukt administratoru \x04!calladmin");
-                    info.ReplyToCommand($" --- \x0ARTV saistītās komandas \x04!rtv !nominate !timeleft !nextmap");
-                });
-            AddCommandListener("say", OnPlayerSayPublic, HookMode.Post);
-
+                    if (player is null || !player.IsValid || player.IsBot)
+                        continue;
+                    KickPlayer? kickplayer = GetKickPlayer(player!);
+                    if (kickplayer is null || !kickplayer.IsValid || !kickplayer.IsPlayer)
+                        continue;
+                    players++;
+                }
+                return players;
+            }
+        }
+        public void InitializeChat()
+        {                       
             var monitor = AddTimer(1, () =>
             {
                 updateMonitor();
@@ -78,17 +74,17 @@ namespace Kick
                 return HookResult.Continue;
 
             KickPlayer? kickplayer = GetKickPlayer(player!);
-            WebData? webData = kickplayer.webData;
-            int kickID = webData.webID;
+            WebData? WebData = kickplayer.WebData;
+            int kickID = WebData.webID;
             string playername = player.PlayerName;
-            if (chatMsg.StartsWith("/"))
+            if (chatMsg.StartsWith('/'))
                 return HookResult.Continue;
-            if (chatMsg.StartsWith("!"))
+            if (chatMsg.StartsWith('!'))
                 return HookResult.Continue;
             if (string.IsNullOrWhiteSpace(chatMsg))
                 return HookResult.Continue;
 
-            if (kickplayer.webData.hasWeb)
+            if (kickplayer.WebData.hasWeb)
             {
                 string msg =
                     $"/?id={kickID}&nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(chatMsg)}&server={server}";
@@ -100,94 +96,84 @@ namespace Kick
                     $"/?nick={HttpUtility.UrlEncode(playername)}&msg={HttpUtility.UrlEncode(chatMsg)}&server={server}";
                 _ = WebGetReqAsync(msg);
             }
-
-            string logmsg = ($" {player.SteamID} || {playername}: {chatMsg}");
-            chatLog(logmsg);
             return HookResult.Continue;
         }
 
-        public async Task WebGetReqAsync(string msg)
+        public static async Task WebGetReqAsync(string msg)
         {
-            using (var _httpclient = new HttpClient())
-            {
-                var url = $"{host}{msg}";        
-                var response = await _httpclient.GetAsync(url);
-            }
+            using var _httpclient = new HttpClient();
+            var url = $"{host}{msg}";
+            var response = await _httpclient.GetAsync(url);
         }
 
         public void startItemTimer(KickPlayer kickplayer)
         {
-            if (!kickplayer.IsPlayer && !kickplayer.IsValid && !kickplayer.webData.hasWeb)
+            if (!kickplayer.IsPlayer && !kickplayer.IsValid && !kickplayer.WebData.hasWeb)
                 return;
             kickplayer.itemTimer = AddTimer(1, () =>
             {
-                kickplayer.webData.itemChance++;
+                kickplayer.WebData.itemChance++;
             }, TimerFlags.REPEAT);
         }
 
         public void startXpTimer(KickPlayer kickplayer)
         {
-
-
-            if (!kickplayer.IsPlayer && !kickplayer.webData.hasWeb)
+            if (!kickplayer.IsPlayer && !kickplayer.WebData.hasWeb)
                 return;
-
-            string msg = $"/?type=add_server_xp&userid={kickplayer.webData.webID}&server=cs2";
-
+            string msg = $"/?type=add_server_xp&userid={kickplayer.WebData.webID}&server=cs2";
             kickplayer.XPtimer = AddTimer(10, () =>
             {
-                kickplayer.webData.xpTime += 10;
-                if (kickplayer.webData.xpTime == xpTime)
+                kickplayer.WebData.xpTime += 10;
+                if (kickplayer.WebData.xpTime == xpTime)
                 {
                     kickplayer.Controller.PrintToChat($" \x04[Kick] \x10Saņēmi\x04 10 \x10XP forumā par spēlēšanu serverī");
-                    kickplayer.webData.xpTime = 0;
+                    kickplayer.WebData.xpTime = 0;
                     _ = WebGetReqAsync(msg);
-                    Server.NextFrame(() => UpdateXpTime(kickplayer));
+                    Server.NextFrame(async () => await UpdateXpTime(kickplayer));
                 }
             }, TimerFlags.REPEAT);
-
         }
 
         public void rewardItems()
         {
-            userList userlist = new userList
+            var userlist = new UserList
             {
-                users = new List<user>(),
-                guests = new List<guest> { }
+                users = new List<User>(),
+                guests = new List<Guest> { }
             };
             foreach (var kickplayer in KickPlayers)
             {
                 
                 if (!kickplayer.IsValid || !kickplayer.IsPlayer)
                     continue;
-                if (kickplayer.webData.hasWeb)
+                if (kickplayer.WebData.hasWeb)
                 {
-                    user newUser = new user
+                    var newUser = new User
                     {
-                        id = kickplayer.webData.webID,
-                        chance = kickplayer.webData.itemChance
+                        Id = kickplayer.WebData.webID,
+                        chance = kickplayer.WebData.itemChance
                     };
                     userlist.users.Add(newUser);
                     kickplayer.itemTimer?.Kill();
                     kickplayer.itemTimer = null;
-                    kickplayer.webData.itemChance = 0;
+                    kickplayer.WebData.itemChance = 0;
                 }
             }
 
             foreach (var kickplayer in KickPlayers)
             {
                 
-                if (!kickplayer.webData.hasWeb)
+                if (!kickplayer.WebData.hasWeb)
                 {
-                    guest newGuest = new guest
+                    var newGuest = new Guest
                     {
                         name = HttpUtility.UrlEncode(kickplayer.PlayerName),
-                        chance = kickplayer.webData.itemChance
+                        chance = kickplayer.WebData.itemChance
                     };
                     userlist.guests.Add(newGuest);
                     kickplayer.itemTimer?.Kill();
                     kickplayer.itemTimer = null;
-                    kickplayer.webData.itemChance = 0;
+                    kickplayer.WebData.itemChance = 0;
                 }
             }
 
@@ -204,27 +190,8 @@ namespace Kick
         }
         public void updateMonitor()
         {
-            //To add????
-            //server_print("^"amx_nextmap ^ " is ^" % s ^ "", amx_nextmap);
-            //server_print("^"amx_timeleft ^ " is ^" % s ^ "", amx_timeleft);
-            //server_print("^"mp_timelimit ^ " is ^" % s ^ "", mp_timelimit);
-            // Add country to users data
-            //if (user_id[i]) server_print(user_name[i], team, frags, country[i], user_id[i], user_seo[i], vips);
             string updateMonitors;
-            int playersOn = 0;
-            
-
-            foreach (var player in Utilities.GetPlayers())
-            {
-                if (player is null || !player.IsValid || player.IsBot)
-                    continue;
-                KickPlayer? kickplayer = GetKickPlayer(player!);
-                if (kickplayer is null || !kickplayer.IsValid || !kickplayer.IsPlayer)
-                    continue;
-                playersOn++;
-            }
-            
-            updateMonitors = $"\"map\" is \"{map}\"\n\"playercount\" is \"{playersOn}\"\n\"twin\" is \"{tsWins}\"\n\"ctwin\" is \"{ctWins}\"\n\"maxplayers\" is \"{maxPlayers}\"\n";
+            updateMonitors = $"\"Map\" is \"{Map}\"\n\"playercount\" is \"{playersOn}\"\n\"twin\" is \"{tsWins}\"\n\"ctwin\" is \"{ctWins}\"\n\"maxplayers\" is \"{MaxPlayers}\"\n";
             foreach (var player in Utilities.GetPlayers())
             {
                 if(player is null || !player.IsValid || player.IsBot)
@@ -248,177 +215,85 @@ namespace Kick
                         team = "CT";
                         break;
                 }
-
                 string escapedName = kickplayer.PlayerName.Replace('\"', ' ');
                 int frags = player.ActionTrackingServices?.MatchStats?.Kills ?? 0;
                 int vips = 0;
                 string country = "Latvia";
-                if (AdminManager.PlayerHasPermissions(player, "css_vip")) vips = 1;
-                if (kickplayer.webData.hasWeb)
+                if (AdminManager.PlayerHasPermissions(player, "@css/vip")) 
+                    vips = 1;
+                if (kickplayer.WebData.hasWeb)
                 {
                     updateMonitors =
-                        $"{updateMonitors}\"{escapedName}\" \"{team}\" \"{frags}\" \"{country}\" \"{kickplayer.webData.webID}/{kickplayer.webData.username_seo}/\" \"{vips}\"\n";
+                        $"{updateMonitors}\"{HttpUtility.UrlEncode(escapedName)}\" \"{team}\" \"{frags}\" \"{country}\" \"{kickplayer.WebData.webID}/{kickplayer.WebData.username_seo}/\" \"{vips}\"";
                 }
                 else
                 {
                     updateMonitors =
-                        $"{updateMonitors}\"{escapedName}\" \"{team}\" \"{frags}\" \"{country}\" \"{vips}\"";
+                        $"{updateMonitors}\"{HttpUtility.UrlEncode(escapedName)}\" \"{team}\" \"{frags}\" \"{country}\" \" \" \"{vips}\"";
                 }
             }
-
-            playersOn = 0;
             _ = UpdateMonitorsAsync(updateMonitors);
-        }
-        //To do for Call Admin: Add user, reason panel
-        //	[red]Lxst[/red] sauc adminu uz [red]JB[/red] serveri! Parkapejs: [red]Ass[/red] Iemesls: [red]Cheats[/red]
-        public void OnCommandCalladmin(CCSPlayerController player, CommandInfo info)
-        {
-            KickPlayer? kickplayer = GetKickPlayer(player!);
-            
-            if (kickplayer.CDTimer != null)
-            {
-                player.PrintToChat($" \x04[Kick]\x10 Tu jau nosūtiji izsaukumu pēc administratora!");
-                return;
-            }
-                
-
-            kickplayer.CDTimer = AddTimer(60, ()=>
-            {
-                kickplayer.CDTimer?.Kill();
-                kickplayer.CDTimer = null;
-            });
-
-            info.ReplyToCommand($" \x04[Kick]\x10 Izsaukums pēc admina nosūtīts, paldies un gaidi adminu!");
-            info.ReplyToCommand($" \x04[Kick]\x0F LASI ČATU UN NEEJ ĀRĀ NO SERVERA NĀKAMĀS 10 MINŪTES.");
-            info.ReplyToCommand($" \x04[Kick]\x0F ADMINS var uzdot jautājumus calladmin sakarā un tev ir pienākums viņam atbildēt!");
-            string playername = kickplayer.PlayerName;
-            string calladminmsg = $"[red]{HttpUtility.UrlEncode(playername)}[/red] sauc adminu uz [red]{callAdminServer}[/red] serveri!";
-            string msg = $"/?&nick=CALLADMIN&msg={calladminmsg}&server=forums";
-            _ = WebGetReqAsync(msg);
-        }
-
-        [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
-        public void OnCommandWebChatRcon(CCSPlayerController player, CommandInfo info)
-        {
-            if (!CommandHelper(player, info, CommandUsage.SERVER_ONLY, 2, "<name> <msg>", permission: "@css/rcon"))
-                return;
-            string name = info.GetArg(1);
-            string msg = info.GetArg(2);
-
-            Server.PrintToChatAll($" \x04[WEB] \x0F{name} \x10: {msg}");
-        }
-
-        [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
-        public void OnCommadWebPmSay(CCSPlayerController player, CommandInfo info)
-        {
-            if (!CommandHelper(player, info, CommandUsage.SERVER_ONLY, 2, "<id> <msg>", permission: "@css/rcon"))
-                return;
-
-
-            int id = int.Parse(info.GetArg(1));
-            string msg = info.GetArg(2);
-
-            if (msg == null || msg.StartsWith(" "))
-                return;
-            foreach (var kickplayer in KickPlayers)
-            {
-                if(!kickplayer.webData.hasWeb)
-                    continue;
-                if (kickplayer.webData.webID == id)
-                {
-                    kickplayer.Controller.PrintToChat($" \x0F[kick.lv] \x04: {msg}");
-                }
-            }
-        }
-
-        //////////////////////////////
-        //          CHATLOG         //
-        //////////////////////////////
-        public void CreateLog()
-        {
-            var LogPath = Path.Combine(_ModuleDirectory, "../../logs/kick/");
-            var FileName = ("chat-") + DateTime.Now.ToString("MM-dd-yyyy") + (".txt");
-            var FilePath = Path.Combine(_ModuleDirectory, "../../logs/kick/") + ($"{FileName}");
-
-            if (!Directory.Exists(LogPath))
-            {
-                Directory.CreateDirectory(LogPath);
-            }
-
-            if (!File.Exists(FilePath))
-            {
-                File.Create(FilePath);
-            }
-        }
-        public void chatLog(string logmsg)
-        {
-            var FileName = ("chat-") + DateTime.Now.ToString("MM-dd-yyyy") + (".txt");
-            var FilePath = Path.Combine(_ModuleDirectory, "../../logs/kick/") + ($"{FileName}");
-            using (StreamWriter writer = File.AppendText(FilePath)) 
-            {
-                writer.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + logmsg);
-            }
-        }
-        //DEBUGING CMDS//
-
-        //public void OnCommandTestGet(CCSPlayerController pl, CommandInfo info)
+        }        
+        //public void updateMonitor()
         //{
-        //    userList userlist = new userList
-        //    {
-        //        users = new List<user>(),
-        //        guests = new List<guest> { }
-        //    };
+        //    //To add????
+        //    //server_print("^"amx_nextmap ^ " is ^" % s ^ "", amx_nextmap);
+        //    //server_print("^"amx_timeleft ^ " is ^" % s ^ "", amx_timeleft);
+        //    //server_print("^"mp_timelimit ^ " is ^" % s ^ "", mp_timelimit);
+        //    // Add country to users data
+        //    //if (user_id[i]) server_print(user_name[i], team, frags, country[i], user_id[i], user_seo[i], vips);
+        //    string serverInfo;
+        //    string playerInfo = "";
+        //    string sendUpdate = "";
+
+
+
+
+        //    serverInfo = $"\"Map\" is \"{Map}\"\n\"playercount\" is \"{playersOn}\"\n\"twin\" is \"{tsWins}\"\n\"ctwin\" is \"{ctWins}\"\n\"maxplayers\" is \"{MaxPlayers}\"\n";
         //    foreach (var player in Utilities.GetPlayers())
         //    {
-        //        KickPlayer? kickplayer = GetKickPlayer(player!);
-        //        if (!kickplayer.IsValid || !kickplayer.IsPlayer)
+        //        if (player is null || !player.IsValid || player.IsBot)
         //            continue;
-        //        if (kickplayer.webData.hasWeb)
-        //        {
-        //            user newUser = new user
-        //            {
-        //                id = kickplayer.webData.webID,
-        //                chance = kickplayer.webData.itemChance
-        //            };
-        //            userlist.users.Add(newUser);
-        //            kickplayer.webData.itemChance = 60;
-        //        }
-        //    }
-
-        //    foreach (var player in Utilities.GetPlayers())
-        //    {
         //        KickPlayer? kickplayer = GetKickPlayer(player!);
-        //        if (!kickplayer.IsValid || !kickplayer.IsPlayer)
+        //        if (kickplayer is null || !kickplayer.IsValid || !kickplayer.IsPlayer)
         //            continue;
-        //        if (!kickplayer.webData.hasWeb)
+        //        string team = player.TeamNum.ToString();
+        //        switch (player.TeamNum)
         //        {
-        //            guest newGuest = new guest
-        //            {
-        //                name = HttpUtility.UrlEncode(kickplayer.PlayerName),
-        //                chance = kickplayer.webData.itemChance
-        //            };
-        //            userlist.guests.Add(newGuest);
-        //            kickplayer.webData.itemChance = 60;
+        //            case 0: //unas
+        //                team = "UNASSIGNED|SPECTATOR";
+        //                break;
+        //            case 1: //spec
+        //                team = "UNASSIGNED|SPECTATOR";
+        //                break;
+        //            case 2:
+        //                team = "TERRORIST";
+        //                break;
+        //            case 3:
+        //                team = "CT";
+        //                break;
         //        }
+
+
+        //        string escapedName = kickplayer.PlayerName.Replace('\"', ' ');
+        //        int frags = player.ActionTrackingServices?.MatchStats?.Kills ?? 0;
+        //        int vips = 0;
+        //        string country = "Latvia";
+        //        if (AdminManager.PlayerHasPermissions(player, "@css/vip"))
+        //            vips = 1;
+        //        if (kickplayer.WebData.hasWeb)
+        //        {
+        //            playerInfo =
+        //                $"{playerInfo}\"{escapedName}\" \"{team}\" \"{frags}\" \"{country}\" \"{kickplayer.WebData.webID}/{kickplayer.WebData.username_seo}/\" \"{vips}\"\n";
+        //        }
+        //        else
+        //        {
+        //            playerInfo =
+        //                $"{playerInfo}\"{escapedName}\" \"{team}\" \"{frags}\" \"{country}\" \"0/ /\" \"{vips}\"";
+        //        }
+        //        sendUpdate = serverInfo + playerInfo;
         //    }
-
-        //    var usersJson = JsonConvert.SerializeObject(userlist);
-        //    string type = "/?type=award_item_winners&server=ttt&list=";
-        //    var msg = $"{type}{usersJson}";
-        //    Server.PrintToChatAll(msg);
-        //    _ = WebGetReqAsync(msg);
-        //}
-
-        //public void OnCommandWeb(CCSPlayerController player, CommandInfo info)
-        //{
-        //    KickPlayer? kp = GetKickPlayer(player!);
-        //    info.ReplyToCommand($"web: {kp.webData.hasWeb.ToString()}");
-        //    info.ReplyToCommand(kp.webData.webID.ToString());
-        //    info.ReplyToCommand(kp.webData.webNick);
-        //    info.ReplyToCommand(kp.webData.lvl.ToString());
-        //    info.ReplyToCommand(kp.webData.xp.ToString());
-        //    info.ReplyToCommand(kp.webData.xpTime.ToString());
-        //}
+        //    _ = UpdateMonitorsAsync(sendUpdate);
+        //}       
     }
-
 }
